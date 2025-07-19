@@ -1,3 +1,4 @@
+import os
 from dotenv import load_dotenv
 import streamlit as st
 from langchain.chat_models import init_chat_model
@@ -7,11 +8,16 @@ from langchain_community.utilities import SQLDatabase
 from langchain_community.callbacks import StreamlitCallbackHandler
 from langchain_openai import OpenAI
 from langchain.agents.output_parsers import ReActSingleInputOutputParser
+from langchain_experimental.tools.python.tool import PythonREPLTool
+from langchain.agents.agent_toolkits import FileManagementToolkit
+from langchain.agents import initialize_agent
+from langchain.agents import AgentType
 
 st.set_page_config(page_title="DbBot", page_icon="📊")
 st.header('📊 Welcome to DbBot, your companion for working with SQL databases.')
 
 db_types = {"PostgreSQL": "postgresql+psycopg2", "MySQL": "mysql+pymysql", "SQLite": "sqlite"}
+dialect_types = {"PostgreSQL": "postgresql", "MySQL": "mysql", "SQLite": "sqlite"}
 st.sidebar.title("DbBot")
 selected_db_type = st.sidebar.selectbox("Please select the type of your database:", options=db_types.keys())
 db_type = db_types[selected_db_type]
@@ -28,7 +34,12 @@ else:
 llm = init_chat_model("gemini-2.5-pro", model_provider="google_genai")
 # llm = OpenAI()
 
-toolkit = SQLDatabaseToolkit(db=db, llm=llm)
+working_directory = os.getcwd()
+tools = FileManagementToolkit(
+    root_dir=str(working_directory),
+    selected_tools=["read_file", "write_file", "list_directory"],).get_tools()
+tools.append(PythonREPLTool())
+tools.extend(SQLDatabaseToolkit(db=db, llm=llm).get_tools())
 
 prompt_prefix = """ 
 ##Instructions:
@@ -79,15 +90,17 @@ LIMIT 5;
 ===>End of an Example of Explanation
 """
 
-agent_executor = create_sql_agent(
-    prefix=prompt_prefix,
-    format_instructions = prompt_format_instructions,
-    llm=llm,
-    toolkit=toolkit,
+agent = initialize_agent(
+    tools, 
+    llm, 
+    agent= AgentType.STRUCTURED_CHAT_ZERO_SHOT_REACT_DESCRIPTION, 
     verbose=True,
-    top_k=10,
     handle_parsing_errors=True,
-    output_parser=ReActSingleInputOutputParser()
+    output_parser=ReActSingleInputOutputParser(),
+    agent_kwargs={
+        "prefix": prompt_prefix,
+        "format_instructions": prompt_format_instructions
+    }
 )
 
 if "messages" not in st.session_state or st.sidebar.button("Clear message history"):
@@ -105,7 +118,12 @@ if user_query:
     with st.chat_message("assistant"):
         st_cb = StreamlitCallbackHandler(st.container())
         # try:
-        response = agent_executor.run(user_query, callbacks = [st_cb])
+        response = agent.run(
+            {
+                "input": user_query,
+                "dialect": dialect_types[selected_db_type],
+                "top_k": 10
+            }, callbacks = [st_cb])
         # except ValueError as e:
         #     response = f"⚠️ Error parsing the response: {e}"
         st.session_state.messages.append({"role": "assistant", "content": response})
