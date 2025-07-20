@@ -7,3 +7,4 @@ psycopg2-binary==2.9.10
 langchain-openai==0.3.28
 langchain-huggingface==0.3.0
 langchain-experimental==0.3.4
+matplotlib==3.10.3

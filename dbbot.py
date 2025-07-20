@@ -2,16 +2,22 @@ import os
 from dotenv import load_dotenv
 import streamlit as st
 from langchain.chat_models import init_chat_model
-from langchain_community.agent_toolkits.sql.base import create_sql_agent
 from langchain_community.agent_toolkits import SQLDatabaseToolkit
 from langchain_community.utilities import SQLDatabase
 from langchain_community.callbacks import StreamlitCallbackHandler
 from langchain_openai import OpenAI
 from langchain.agents.output_parsers import ReActSingleInputOutputParser
 from langchain_experimental.tools.python.tool import PythonREPLTool
-from langchain.agents.agent_toolkits import FileManagementToolkit
+from langchain_community.agent_toolkits.file_management.toolkit import FileManagementToolkit
 from langchain.agents import initialize_agent
 from langchain.agents import AgentType
+from langchain_core.rate_limiters import InMemoryRateLimiter
+
+rate_limiter = InMemoryRateLimiter(
+    requests_per_second=0.1,  # <-- Super slow! We can only make a request once every 10 seconds!!
+    check_every_n_seconds=0.1,  # Wake up every 100 ms to check whether allowed to make a request,
+    max_bucket_size=10,  # Controls the maximum burst size.
+)
 
 st.set_page_config(page_title="DbBot", page_icon="📊")
 st.header('📊 Welcome to DbBot, your companion for working with SQL databases.')
@@ -31,7 +37,7 @@ else:
     st.error("Please select the type of your database and enter the uri.")
     st.stop()
 
-llm = init_chat_model("gemini-2.5-pro", model_provider="google_genai")
+llm = init_chat_model("gemini-2.5-pro", model_provider="google_genai", rate_limiter=rate_limiter)
 # llm = OpenAI()
 
 working_directory = os.getcwd()

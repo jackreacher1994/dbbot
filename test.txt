@@ -1,0 +1,7 @@
+1. List all tables in current database
+
+2. Describe the customer table
+
+3. List 5 customers whose first name starting with "A"
+
+4. Generate a bar chart of the top 10 albums for listenning. Save the output in the current working directory with a suitable file name
